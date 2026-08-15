@@ -124,12 +124,18 @@ func (pk ServerBoundHandshake) ParseRealIP() (net.Addr, time.Time, []byte, error
 	return addr, timeStamp, []byte(payload[3]), nil
 }
 
-func (pk *ServerBoundHandshake) UpgradeToRealIP(clientAddr net.Addr, timestamp time.Time) {
+func (pk *ServerBoundHandshake) UpgradeToRealIP(clientAddr net.Addr, timestamp time.Time, signer *protocol.Signer) error {
 	addr := string(pk.ServerAddress)
 	addrWithForge := strings.SplitN(addr, SeparatorForge, 3)
 
 	if len(addrWithForge) > 0 {
 		addr = fmt.Sprintf("%s///%s///%d", addrWithForge[0], clientAddr.String(), timestamp.Unix())
+
+		signed, err := signer.Sign(addr)
+		if err != nil {
+			return err
+		}
+		addr = signed
 	}
 
 	if len(addrWithForge) > 1 {
@@ -137,4 +143,6 @@ func (pk *ServerBoundHandshake) UpgradeToRealIP(clientAddr net.Addr, timestamp t
 	}
 
 	pk.ServerAddress = protocol.String(addr)
+
+	return nil
 }

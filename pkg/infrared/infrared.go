@@ -18,6 +18,7 @@ type Config struct {
 	ServerConfigs       []ServerConfig      `yaml:"servers"`
 	FiltersConfig       FiltersConfig       `yaml:"filters"`
 	ProxyProtocolConfig ProxyProtocolConfig `yaml:"proxyProtocol"`
+	PrivateKeyPath      string              `yaml:"privateKeyPath"`
 }
 
 func NewConfig() Config {
@@ -105,6 +106,7 @@ type Infrared struct {
 	bufPool sync.Pool
 	conns   map[net.Addr]*clientConn
 	sr      ServerRequester
+	signer  *protocol.Signer
 }
 
 func New() *Infrared {
@@ -195,8 +197,22 @@ func (ir *Infrared) init() error {
 		return err
 	}
 
+	if err := ir.initSigner(); err != nil {
+		return err
+	}
+
 	ir.filter = NewFilter(WithFilterConfig(ir.cfg.FiltersConfig))
 
+	return nil
+}
+
+func (ir *Infrared) initSigner() error {
+	signer, err := protocol.NewSigner(ir.cfg.PrivateKeyPath)
+	if err != nil {
+		return err
+	}
+
+	ir.signer = signer
 	return nil
 }
 
@@ -317,7 +333,19 @@ func (ir *Infrared) handlePipe(c *clientConn, resp ServerResponse) error {
 		}
 	}
 
-	if err := rc.WritePackets(c.readPks[0], c.readPks[1]); err != nil {
+	// RealIP
+	err := c.handshake.UpgradeToRealIP(c.RemoteAddr(), time.Now(), ir.signer)
+	if err != nil {
+		return err
+	}
+
+	err = c.handshake.Marshal(&c.readPks[0])
+	if err != nil {
+		return err
+	}
+
+	err = rc.WritePackets(c.readPks[0], c.readPks[1])
+	if err != nil {
 		return err
 	}
 

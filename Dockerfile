@@ -13,14 +13,10 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o ./out/infrared ./cmd/infrared
 
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates \
-    && addgroup -S infrared \
-    && adduser -S infrared -G infrared
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
 COPY --from=builder /src/out/infrared /app/infrared
-
-USER infrared
 
 ENTRYPOINT [ "/app/infrared" ]
